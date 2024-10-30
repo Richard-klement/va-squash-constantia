@@ -1,0 +1,24 @@
+{
+  "name": "squashpress",
+  "version": "1.0.0",
+  "description": "A booking plugin designed specifically for Virgin Active Constantia squash courts",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Richard-klement/va-squash-constantia.git"
+  },
+  "keywords": [
+    "booking",
+    "squash",
+    "courts"
+  ],
+  "author": "Richard Klement",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/Richard-klement/va-squash-constantia/issues"
+  },
+  "homepage": "https://github.com/Richard-klement/va-squash-constantia#readme"
+}
