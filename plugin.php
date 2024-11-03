@@ -1,9 +1,9 @@
 <?php
 /*
-Plugin Name: Booking Calendar
+Plugin Name: Squashpress
 Description: React-based booking calendar system
 Version: 1.0
-Author: Your Name
+Author: Richard Klement
 */
 
 // Prevent direct access
