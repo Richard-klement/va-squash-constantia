@@ -1,50 +1,64 @@
-// src/index.js
 import React from 'react';
-import { createRoot } from 'react-dom/client';
-import BookingCalendar from './BookingCalendar';
-import './index.css';
+const { render } = wp.element;
+import BookingCalendar from './components/bookingCalendar';
 
 // Wait for DOM to be ready
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('booking-calendar-root');
+    console.log('Booking Calendar: Container found:', !!container);
+    
     if (container) {
-        const root = createRoot(container);
-        root.render(<BookingCalendar />);
+        render(<BookingCalendar />, container);
+        console.log('Booking Calendar: Rendered successfully');
     }
 });
 
-// Modified BookingCalendar component to work with WordPress
-const BookingCalendar = () => {
-    // ... Previous BookingCalendar code ...
+console.log('Booking Calendar: Script initializing');
 
-    // Modify handleBooking to work with WordPress REST API
-    const handleBooking = async () => {
-        if (selectedDate && selectedTimeSlots.length > 0) {
-            try {
-                const response = await fetch('/wp-json/booking-calendar/v1/bookings', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-WP-Nonce': bookingCalendarData.nonce
-                    },
-                    body: JSON.stringify({
-                        date: selectedDate.toISOString().split('T')[0],
-                        startTime: selectedTimeSlots[0],
-                        endTime: selectedTimeSlots[selectedTimeSlots.length - 1]
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Booking failed');
-                }
-
-                setShowBookingConfirmation(true);
-            } catch (error) {
-                console.error('Booking error:', error);
-                // Handle error (show error message to user)
-            }
+// Check for WordPress environment
+if (typeof wp === 'undefined' || typeof wp.element === 'undefined') {
+    console.error('WordPress element not found. Waiting...');
+    
+    // Wait for WordPress to be ready
+    const checkWordPress = setInterval(() => {
+        if (typeof wp !== 'undefined' && typeof wp.element !== 'undefined') {
+            clearInterval(checkWordPress);
+            initializeCalendar();
         }
-    };
+    }, 100);
+} else {
+    initializeCalendar();
+}
 
-    // ... Rest of BookingCalendar code ...
-};
+function initializeCalendar() {
+    const { render } = wp.element;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('booking-calendar-root');
+        console.log('test');
+       
+        if (container) {
+            import('./components/bookingCalendar')
+                .then(({ default: BookingCalendar }) => {
+                    render(<BookingCalendar />, container);
+                    console.log('Booking Calendar: Rendered successfully');
+                })
+                .catch(error => {
+                    console.error('Failed to load BookingCalendar component:', error);
+                });
+        } else {
+            console.error('Booking Calendar: Container not found');
+        }
+    });
+}
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    console.error('Booking Calendar Error:', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error
+    });
+});
