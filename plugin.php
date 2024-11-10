@@ -205,9 +205,13 @@ function booking_calendar_enqueue_scripts() {
         'booking-calendar-script',
         'bookingCalendarData',
         array(
+            'root' => esc_url_raw(rest_url()),
             'nonce' => wp_create_nonce('wp_rest'),
             'ajaxurl' => admin_url('admin-ajax.php'),
-            'root' => esc_url_raw(rest_url())
+            'user' => array(
+            'ID' => get_current_user_id(),
+            'display_name' => wp_get_current_user()->display_name
+        )
         )
     );
 }
@@ -241,46 +245,107 @@ add_shortcode('booking_calendar', 'booking_calendar_shortcode');
 
 
 // Add REST API endpoint for bookings
+// Register REST API endpoints
 function register_booking_routes() {
+    // Route for getting bookings (GET)
     register_rest_route('booking-calendar/v1', '/bookings', array(
-        'methods' => 'GET',
-        'callback' => 'get_bookings',
-        'permission_callback' => function () {
-            return is_user_logged_in();
-        }
+        array(
+            'methods'  => 'GET',
+            'callback' => 'get_bookings',
+            'permission_callback' => '__return_true', // Allow public access for viewing
+            'args' => array(
+                'date' => array(
+                    'required' => true,
+                    'validate_callback' => function($param) {
+                        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $param);
+                    }
+                )
+            )
+        ),
+        // Route for creating bookings (POST)
+        array(
+            'methods'  => 'POST',
+            'callback' => 'handle_booking',
+            'permission_callback' => function() {
+                return is_user_logged_in(); // Require login for booking
+            }
+        )
     ));
 
-    register_rest_route('booking-calendar/v1', '/bookings', array(
-        'methods' => 'POST',
-        'callback' => 'handle_booking',
-        'permission_callback' => function () {
+    // Add DELETE endpoint
+    register_rest_route('booking-calendar/v1', '/bookings/(?P<id>\d+)', array(
+        'methods' => 'DELETE',
+        'callback' => 'delete_booking',
+        'permission_callback' => function() {
             return is_user_logged_in();
-        }
+        },
+        'args' => array(
+            'id' => array(
+                'validate_callback' => function($param) {
+                    return is_numeric($param);
+                }
+            )
+        )
     ));
 }
 add_action('rest_api_init', 'register_booking_routes');
 
 // Get bookings
-// Get bookings endpoint
 function get_bookings($request) {
     global $wpdb;
     $table_name = $wpdb->prefix . 'bookings';
     
     $date = $request->get_param('date');
-    
+    error_log('GET /bookings request received for date: ' . $date);
+
+    $current_user_id = get_current_user_id();
+
+    // Simple direct comparison since formats match
     $query = $wpdb->prepare("
-        SELECT b.*, 
-               u.display_name as user_name
+        SELECT 
+            b.id,
+            b.user_id,
+            b.court_id,
+            b.booking_date,
+            b.start_time,
+            b.end_time,
+            b.status,
+            u.display_name as user_name
         FROM {$table_name} b
         LEFT JOIN {$wpdb->users} u ON b.user_id = u.ID
         WHERE b.booking_date = %s
         ORDER BY b.start_time, b.court_id
     ", $date);
+
+    error_log('Executing query: ' . $query);
     
+    // Get direct results
     $bookings = $wpdb->get_results($query);
-    error_log('Retrieved bookings: ' . print_r($bookings, true));
+    error_log('Found bookings: ' . print_r($bookings, true));
     
-    return new WP_REST_Response($bookings, 200);
+    if ($wpdb->last_error) {
+        error_log('Database error: ' . $wpdb->last_error);
+        return new WP_Error('db_error', 'Database error occurred');
+    }
+
+    // Format results for response
+    $formatted_bookings = array_map(function($booking)  use ($current_user_id) {
+        return array(
+            'id' => (int)$booking->id,
+            'user_id' => (int)$booking->user_id,
+            'current_user_id' => (int)$current_user_id,
+            'court_id' => (int)$booking->court_id,
+            'booking_date' => $booking->booking_date,
+            'start_time' => substr($booking->start_time, 0, -3), // Remove seconds if present
+            'end_time' => rtrim($booking->end_time, ':00'),     // Remove seconds if present
+            'user_name' => $booking->user_name ?: 'Unknown User',
+            'status' => $booking->status
+        );
+    }, $bookings ?: array());
+
+    error_log('Returning formatted bookings: ' . print_r($formatted_bookings, true));
+    
+    return new WP_REST_Response($formatted_bookings, 200);
 }
 
 // Handle booking submission
@@ -387,3 +452,38 @@ function footer_check() {
     }
 }
 add_action('wp_footer', 'footer_check', 99);  // Higher priority to run later
+
+// Add this new function for handling deletes
+function delete_booking($request) {
+    global $wpdb;
+    $booking_id = $request->get_param('id');
+    $current_user_id = get_current_user_id();
+    
+    // First check if booking exists and belongs to user
+    $booking = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}bookings WHERE id = %d AND user_id = %d",
+        $booking_id,
+        $current_user_id
+    ));
+
+    if (!$booking) {
+        return new WP_Error(
+            'booking_not_found',
+            'Booking not found or you do not have permission to delete it',
+            array('status' => 403)
+        );
+    }
+
+    // Delete the booking
+    $result = $wpdb->delete(
+        $wpdb->prefix . 'bookings',
+        array('id' => $booking_id, 'user_id' => $current_user_id),
+        array('%d', '%d')
+    );
+
+    if ($result === false) {
+        return new WP_Error('delete_failed', 'Failed to delete booking', array('status' => 500));
+    }
+
+    return new WP_REST_Response(null, 204);
+}
