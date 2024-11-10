@@ -203,7 +203,8 @@ const BookingCalendar = () => {
                         court_id: parseInt(courtId),
                         start_time: timeSlot,
                         booking_date: formatDateForAPI(selectedDate),
-                        user_name: result.user_name // Make sure this is included
+                        user_name: result.user_name, // Make sure this is included
+                        current_user_id: result.user_id
                     };
                     return [...prevBookings, newBooking];
                 });
