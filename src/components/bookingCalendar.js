@@ -54,12 +54,12 @@ const BookingCalendar = () => {
         // };
     }, []); // Empty dependency array since we want this to run once on mount
 
-    const timeSlots = Array.from({ length: 17 }, (_, index) => { // 17 slots from 9:00 to 21:00
-        const hour = Math.floor(index * 0.75) + 9; // Start at 9:00
+    const timeSlots = Array.from({ length: 41 }, (_, index) => { // 41 slots from 5:00 to 20:00
+        const hour = Math.floor(index * 0.75) + 5; // Start at 5:00
         const minutes = (index * 45) % 60;
         return `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     });
-
+    
     const formatDate = (date) => {
         return date.toLocaleDateString('en-US', {
             year: 'numeric',
