@@ -5,3 +5,10 @@ To get this plugin working, install npm using 'npm install' then run 'npm run bu
 The login creates custion tables and columns on activation and is made available by the shortcode [booking_calendar/]
 
 It's all built using react and all the magic happen in /src
+
+#issue tracker
+
+https://github.com/Richard-klement/va-squash-constantia/issues
+
+#License
+See license.txt but thi is ublished under GPL v3
