@@ -11,4 +11,4 @@ It's all built using react and all the magic happen in /src
 https://github.com/Richard-klement/va-squash-constantia/issues
 
 #License
-See license.txt but thi is ublished under GPL v3
+See license.txt but this is published under GPL v3
