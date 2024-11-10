@@ -54,9 +54,10 @@ const BookingCalendar = () => {
         // };
     }, []); // Empty dependency array since we want this to run once on mount
 
-    const timeSlots = Array.from({ length: 13 }, (_, index) => {
-        const hour = index + 9;
-        return `${hour.toString().padStart(2, '0')}:00`;
+    const timeSlots = Array.from({ length: 17 }, (_, index) => { // 17 slots from 9:00 to 21:00
+        const hour = Math.floor(index * 0.75) + 9; // Start at 9:00
+        const minutes = (index * 45) % 60;
+        return `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     });
 
     const formatDate = (date) => {
@@ -157,6 +158,21 @@ const BookingCalendar = () => {
     const handleTimeSlotClick = async (courtId, timeSlot) => {
         if (!selectedDate) return;
         setLoading(true);
+
+         // Parse the time slot
+    const [hours, minutes] = timeSlot.split(':').map(num => parseInt(num));
+    
+    // Calculate end time (45 minutes later)
+    let endHours = hours;
+    let endMinutes = minutes + 45;
+    
+    if (endMinutes >= 60) {
+        endHours += 1;
+        endMinutes -= 60;
+    }
+
+    const endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+
 
         const bookingData = {
             date: formatDateForAPI(selectedDate),
