@@ -54,11 +54,19 @@ const BookingCalendar = () => {
         // };
     }, []); // Empty dependency array since we want this to run once on mount
 
-    const timeSlots = Array.from({ length: 41 }, (_, index) => { // 41 slots from 5:00 to 20:00
-        const hour = Math.floor(index * 0.75) + 5; // Start at 5:00
-        const minutes = (index * 45) % 60;
-        return `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    });
+    const timeSlots = [];
+let hour = 5; // Start at 5am
+let minutes = 0;
+
+while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach 20:00
+    timeSlots.push(`${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
+    
+    minutes += 45;
+    if (minutes >= 60) {
+        hour += 1;
+        minutes -= 60;
+    }
+}
     
     const formatDate = (date) => {
         return date.toLocaleDateString('en-US', {
