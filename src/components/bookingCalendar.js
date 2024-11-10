@@ -5,11 +5,26 @@ const BookingCalendar = () => {
     const [selectedDate, setSelectedDate] = useState(null);
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(false);
+    
 
     // Debug log current state
     useEffect(() => {
         console.log('Current bookings:', bookings);
     }, [bookings]);
+
+    useEffect(() => {
+        console.log('Selected date changed:', selectedDate);
+    }, [selectedDate]);
+    
+    useEffect(() => {
+        console.log('Bookings updated:', bookings);
+    }, [bookings]);
+
+    useEffect(() => {
+        if (selectedDate) {
+            fetchBookings(selectedDate);
+        }
+    }, [selectedDate]);
 
     const courts = [
         { id: 1, name: 'Court 1' },
@@ -17,6 +32,27 @@ const BookingCalendar = () => {
         { id: 3, name: 'Court 3' },
         { id: 4, name: 'Court 4' },
     ];
+
+     // Add event listener on component mount
+     useEffect(() => {
+        const handleCalendarClick = (e) => {
+            // Check if clicked element is a day cell
+            if (e.target.classList.contains('day')) {
+                const dateAttr = e.target.getAttribute('data-date');
+                if (dateAttr) {
+                    const clickedDate = new Date(dateAttr);
+                    handleDayClick(clickedDate);
+                }
+            }
+        };
+
+        document.addEventListener('click', handleCalendarClick);
+
+        // Cleanup
+        // return () => {
+        //     document.removeEventListener('click', handleCalendarClick);
+        // };
+    }, []); // Empty dependency array since we want this to run once on mount
 
     const timeSlots = Array.from({ length: 13 }, (_, index) => {
         const hour = index + 9;
@@ -31,7 +67,10 @@ const BookingCalendar = () => {
     };
 
     const formatDateForAPI = (date) => {
-        return date.toISOString().split('T')[0];
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
     const previousMonth = () => {
@@ -65,31 +104,55 @@ const BookingCalendar = () => {
 
     const handleDayClick = (date) => {
         if (!date) return;
+        console.log('Day clicked:', date); // Debug log
         setSelectedDate(date);
-        fetchBookings(date);
+        console.log( 'fetched bookings', fetchBookings(date) );
     };
 
     const fetchBookings = async (date) => {
         setLoading(true);
         try {
-            console.log('Fetching bookings for date:', formatDateForAPI(date));
-            const response = await fetch(`/wp-json/booking-calendar/v1/bookings?date=${formatDateForAPI(date)}`, {
+            const formattedDate = formatDateForAPI(date);
+            console.log('Fetching bookings for date:', {
+                originalDate: date,
+                formattedDate: formattedDate,
+                dateString: date.toISOString(),
+                dateObject: {
+                    year: date.getFullYear(),
+                    month: date.getMonth() + 1,
+                    day: date.getDate()
+                }
+            });
+    
+            const response = await fetch(`/wp-json/booking-calendar/v1/bookings?date=${formattedDate}`, {
                 headers: {
                     'X-WP-Nonce': bookingCalendarData.nonce
                 }
             });
             
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const data = await response.json();
-            console.log('Fetched bookings data:', data);
-            setBookings(data);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            const text = await response.text();
+           
+    
+            const data = JSON.parse(text);
+           
+            
+            setBookings(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching bookings:', error);
-            alert('Failed to load bookings. Please try again.');
+            setBookings([]);
         } finally {
             setLoading(false);
         }
     };
+    
+    // Add this effect to monitor the bookings state
+    useEffect(() => {
+        
+    }, [bookings]);
 
     const handleTimeSlotClick = async (courtId, timeSlot) => {
         if (!selectedDate) return;
@@ -102,7 +165,7 @@ const BookingCalendar = () => {
             courtId: courtId
         };
 
-        console.log('Attempting to book:', bookingData);
+
 
         try {
             const response = await fetch('/wp-json/booking-calendar/v1/bookings', {
@@ -115,7 +178,6 @@ const BookingCalendar = () => {
             });
 
             const result = await response.json();
-            console.log('Booking response:', result);
 
             if (response.ok) {
                 setBookings(prevBookings => {
@@ -127,7 +189,6 @@ const BookingCalendar = () => {
                         booking_date: formatDateForAPI(selectedDate),
                         user_name: result.user_name // Make sure this is included
                     };
-                    console.log('Adding new booking with user:', newBooking);
                     return [...prevBookings, newBooking];
                 });
             } else {
@@ -141,13 +202,53 @@ const BookingCalendar = () => {
         }
     };
 
+    const handleDeleteBooking = async (bookingId) => {
+        if (!window.confirm('Are you sure you want to delete this booking?')) {
+            return;
+        }
+    
+        setLoading(true);
+        try {
+            const response = await fetch(`/wp-json/booking-calendar/v1/bookings/${bookingId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': bookingCalendarData.nonce
+                }
+            });
+    
+            if (response.ok) {
+                // Remove the deleted booking from state
+                setBookings(prevBookings => prevBookings.filter(b => b.id !== bookingId));
+            } else {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to delete booking');
+            }
+        } catch (error) {
+            console.error('Error deleting booking:', error);
+            alert(error.message || 'Failed to delete booking');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const getBookingForSlot = (courtId, timeSlot) => {
-        const booking = bookings.find(b => 
-            parseInt(b.court_id) === parseInt(courtId) &&
-            b.start_time === timeSlot &&
-            b.booking_date === formatDateForAPI(selectedDate)
-        );
-        console.log(`Checking booking for court ${courtId}, time ${timeSlot}:`, booking);
+        console.log(bookings);
+        const booking = bookings.find(b => {
+            const matchCourt = parseInt(b.court_id) === parseInt(courtId);
+            const matchTime = b.start_time === timeSlot;
+            const matchDate = b.booking_date === formatDateForAPI(selectedDate);
+            console.log('comparing time: ', 'database time', b.start_time, 'app time:', timeSlot);
+            console.log('Comparing booking:', {
+                booking: b,
+                courtMatch: matchCourt,
+                timeMatch: matchTime,
+                dateMatch: matchDate
+            });
+            
+            return matchCourt && matchTime && matchDate;
+        });
+        
         return booking;
     };
 
@@ -166,16 +267,28 @@ const BookingCalendar = () => {
 
     const renderTimeSlot = (courtId, timeSlot) => {
         const booking = getBookingForSlot(courtId, timeSlot);
-        console.log(`Rendering slot for court ${courtId}, time ${timeSlot}:`, booking);
 
         if (booking) {
+            const isUsersBooking = parseInt(booking.user_id) === parseInt(bookingCalendarData.user.id);
             return (
-                <div className="booked-slot">
-                    {booking.user_name || 'Booked'}
+                <div className="booked-slot" title={`Booked by ${booking.user_name}`}>
+                    <span>{booking.user_name}</span>
+                    {isUsersBooking && (
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteBooking(booking.id);
+                            }}
+                            className="delete-booking"
+                            title="Delete booking"
+                        >
+                            ×
+                        </button>
+                    )}
                 </div>
             );
         }
-
+    
         return (
             <button
                 className="booking-slot available"
@@ -187,32 +300,6 @@ const BookingCalendar = () => {
         );
     };
 
-    // In the JSX where we render the time slots:
-    {timeSlots.map(timeSlot => (
-        <div key={timeSlot} className="time-row">
-            <div className="time-cell">{timeSlot}</div>
-            {courts.map(court => {
-                const booking = getBookingForSlot(court.id, timeSlot);
-                return (
-                    <div key={`${court.id}-${timeSlot}`} className="booking-cell">
-                        {booking ? (
-                            <div className="booked-slot">
-                                {booking.user_name || 'Booked'}
-                            </div>
-                        ) : (
-                            <button
-                                className="booking-slot available"
-                                onClick={() => handleTimeSlotClick(court.id, timeSlot)}
-                                disabled={loading}
-                            >
-                                Book
-                            </button>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    ))}
 
     // Refresh bookings when date is selected
     useEffect(() => {
@@ -226,9 +313,13 @@ const BookingCalendar = () => {
     return (
         <div className="booking-calendar">
             <div className="calendar-header">
-                <button onClick={previousMonth}>&lt; Previous</button>
-                <h2>{formatDate(currentDate)}</h2>
-                <button onClick={nextMonth}>Next &gt;</button>
+                <button onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}>
+                    &lt; Previous
+                </button>
+                <h2>{currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</h2>
+                <button onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}>
+                    Next &gt;
+                </button>
             </div>
 
             <div className="calendar-grid">
@@ -238,17 +329,24 @@ const BookingCalendar = () => {
                     ))}
                 </div>
                 <div className="days">
-                    {days.map((date, index) => (
-                        <div 
-                            key={date ? date.toISOString() : `empty-${index}`}
-                            className={`day ${!date ? 'empty' : ''} 
-                                      ${isToday(date) ? 'today' : ''} 
-                                      ${selectedDate && date && selectedDate.toDateString() === date.toDateString() ? 'selected' : ''}`}
-                            onClick={() => date && handleDayClick(date)}
-                        >
-                            {formatDayDate(date)}
-                        </div>
-                    ))}
+                    {days.map((date, index) => {
+                        const dayClasses = ['day'];
+                        if (!date) dayClasses.push('empty');
+                        if (isToday(date)) dayClasses.push('today');
+                        if (selectedDate && date && selectedDate.toDateString() === date.toDateString()) {
+                            dayClasses.push('selected');
+                        }
+
+                        return (
+                            <div 
+                                key={date ? date.toISOString() : `empty-${index}`}
+                                className={dayClasses.join(' ')}
+                                data-date={date ? date.toISOString() : ''}
+                            >
+                                {formatDayDate(date)}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -267,11 +365,24 @@ const BookingCalendar = () => {
                                 <div className="time-cell">{timeSlot}</div>
                                 {courts.map(court => {
                                     const booking = getBookingForSlot(court.id, timeSlot);
+                                    const isUsersBooking = booking ? booking.user_id === booking.current_user_id : false;
                                     return (
-                                        <div key={`${court.id}-${timeSlot}`} className="booking-cell">
+                                        <div key={`${court.id}-${timeSlot}`} className="booking-cell" >
                                             {booking ? (
-                                                <div className="booked-slot">
-                                                    {booking.user_name}
+                                                <div className="booked-slot" title={`Booked by ${booking.user_name}`} >
+                                                    {booking.user_name || 'Booked'}
+                                                    {isUsersBooking && (
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBooking(booking.id);
+                        }}
+                        className="delete-booking"
+                        title="Delete booking"
+                    >
+                        ×
+                    </button>
+                )}
                                                 </div>
                                             ) : (
                                                 <button
