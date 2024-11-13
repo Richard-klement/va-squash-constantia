@@ -33,11 +33,33 @@ const BookingCalendar = () => {
         { id: 4, name: 'Court 4' },
     ];
 
+    const isDateBeforeToday = (date) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return date < today;
+    };
+    
+    const getUserBookingsForDate = (date) => {
+        return bookings.filter(booking => 
+            booking.booking_date === formatDateForAPI(date) && 
+            booking.user_id === booking.current_user_id
+        );
+    };
+    
+    const canUserBook = (date) => {
+        if (isDateBeforeToday(date)) {
+            return false;
+        }
+        
+        const userBookings = getUserBookingsForDate(date);
+        return userBookings.length < 2;
+    };
+
      // Add event listener on component mount
      useEffect(() => {
         const handleCalendarClick = (e) => {
             // Check if clicked element is a day cell
-            if (e.target.classList.contains('day')) {
+            if (e.target.classList.contains('day') ) {
                 const dateAttr = e.target.getAttribute('data-date');
                 if (dateAttr) {
                     const clickedDate = new Date(dateAttr);
@@ -67,7 +89,7 @@ while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach
         minutes -= 60;
     }
 }
-    
+
     const formatDate = (date) => {
         return date.toLocaleDateString('en-US', {
             year: 'numeric',
@@ -112,7 +134,7 @@ while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach
     };
 
     const handleDayClick = (date) => {
-        if (!date) return;
+        if (!date || !canUserBook(date)) return;
         console.log('Day clicked:', date); // Debug log
         setSelectedDate(date);
         console.log( 'fetched bookings', fetchBookings(date) );
@@ -165,7 +187,19 @@ while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach
 
     const handleTimeSlotClick = async (courtId, timeSlot) => {
         if (!selectedDate) return;
-        setLoading(true);
+
+    if (isDateBeforeToday(selectedDate)) {
+        alert("Cannot book slots in the past");
+        return;
+    }
+
+    const userBookings = getUserBookingsForDate(selectedDate);
+    if (userBookings.length >= 2) {
+        alert("You can only book 2 slots per day");
+        return;
+    }
+
+    setLoading(true);
 
          // Parse the time slot
     const [hours, minutes] = timeSlot.split(':').map(num => parseInt(num));
@@ -314,11 +348,13 @@ while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach
             );
         }
     
+        const userCanBook = canUserBook(selectedDate);
         return (
             <button
                 className="booking-slot available"
                 onClick={() => handleTimeSlotClick(courtId, timeSlot)}
-                disabled={loading}
+                disabled={loading || !userCanBook}
+                title={!userCanBook ? "Maximum 2 bookings per day" : ""}
             >
                 Book
             </button>
@@ -358,6 +394,7 @@ while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach
                         const dayClasses = ['day'];
                         if (!date) dayClasses.push('empty');
                         if (isToday(date)) dayClasses.push('today');
+                        if (isDateBeforeToday(date)) dayClasses.push('disabled');
                         if (selectedDate && date && selectedDate.toDateString() === date.toDateString()) {
                             dayClasses.push('selected');
                         }
@@ -367,6 +404,7 @@ while (hour < 20 || (hour === 20 && minutes === 0)) { // Continue until we reach
                                 key={date ? date.toISOString() : `empty-${index}`}
                                 className={dayClasses.join(' ')}
                                 data-date={date ? date.toISOString() : ''}
+                                
                             >
                                 {formatDayDate(date)}
                             </div>
